@@ -1,0 +1,39 @@
+<ServerConfig>
+  <logging>
+  	<formatters>
+      <f1>
+        <class>PatternFormatter</class>
+        <pattern>%Y-%m-%d %H:%M:%S [%p]: %t</pattern>
+        <times>local</times>
+      </f1>	
+  	</formatters>
+  	<channels>
+      <Console>
+        <class>ConsoleChannel</class>
+        <formatter>f1</formatter>
+      </Console>
+      <File>
+        <class>FileChannel</class>
+        <formatter>f1</formatter>
+        <rotation>daily</rotation>
+        <flush>false</flush>
+        <archive>timestamp</archive>
+        <path>${application.dir}log/${application.baseName}.log</path>
+      </File>
+      <Splitter>
+        <class>SplitterChannel</class>
+        <channels>Console,File</channels>
+      </Splitter>
+      <Async>
+        <class>AsyncChannel</class>
+        <channel>Splitter</channel>
+      </Async>
+    </channels>
+  	<loggers>
+      <root>
+        <channel>Splitter</channel>
+        <level>information</level>
+      </root>  
+    </loggers>
+	</logging>
+</ServerConfig>
