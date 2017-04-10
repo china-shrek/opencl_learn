@@ -41,6 +41,9 @@ private:
     size_t shrRoundUp(size_t f, size_t s);
     void TestMemcopy();
 
+	void DoImageCover();
+	void YuvToRgbPixel(unsigned char y, unsigned char u, unsigned char v,unsigned char* rgb);
+
 private:
     vector<cl_platform_id>      m_vec_ptf;
     vector<cl_device_id>        m_vec_dev;

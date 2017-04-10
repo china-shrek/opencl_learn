@@ -5,6 +5,10 @@
 #include "Poco/LineEndingConverter.h"
 #include "Poco/Stopwatch.h"
 #include "Poco/Buffer.h"
+#include "ColorTable.h"
+#include "libyuv.h"
+
+#pragma comment(lib,"libyuv.lib")
 
 HelloWorldCL::HelloWorldCL()
 {
@@ -41,12 +45,12 @@ bool HelloWorldCL::Init(string file)
 
     for (int i = 0; i < m_vec_ptf.size(); i++)
     {
-        //TryGetCPUDevice(m_vec_ptf[i]);
-        //TryGetGPUDevice(m_vec_ptf[i]);
-        TryGetAllDevice(m_vec_ptf[i]);
+        TryGetCPUDevice(m_vec_ptf[i]);
+        TryGetGPUDevice(m_vec_ptf[i]);
+        //TryGetAllDevice(m_vec_ptf[i]);
     }
 
-    PrintfDevice();
+    //PrintfDevice();
     
     string source = ReadCodeFromFile(file);
     //创建设备
@@ -81,9 +85,9 @@ bool HelloWorldCL::Init(string file)
         Buffer<char> build_log(1024 * 1024);
         clRet = clBuildProgram(edev.program, 1, &m_vec_dev[i], NULL, NULL, NULL);
         clGetProgramBuildInfo(edev.program, m_vec_dev[i], CL_PROGRAM_BUILD_LOG, build_log.capacity(), build_log.begin(), NULL);
-//         printf("build log*************beg***************\n");
-//         printf("%s", build_log.begin());
-//         printf("build log*************end***************\n");
+        printf("build log*************beg***************\n");
+        printf("%s", build_log.begin());
+        printf("build log*************end***************\n");
         if (CL_SUCCESS != clRet)	// 编译错误
         {
             cout << "Error: Can not build program" << endl;
@@ -96,7 +100,8 @@ bool HelloWorldCL::Init(string file)
     }
 
     //RunProgram();
-    TestMemcopy();
+    //TestMemcopy();
+	DoImageCover();
 
     return true;
 }
@@ -414,6 +419,135 @@ void HelloWorldCL::TestMemcopy()
         clReleaseMemObject(copy_host);
         WATCH_FUNC_END(copy_host);
     }
+}
+
+void HelloWorldCL::DoImageCover()
+{
+	FileInputStream fs("../helpsource/test_1920x960_one.yuv", ios::binary);
+	int width = 1920;
+	int height = 960;
+	Buffer<unsigned char> Y(width * height);
+	Buffer<unsigned char> U(width * height / 4);
+	Buffer<unsigned char> V(width * height / 4);
+	Buffer<unsigned char> rgb(width*height * 3);
+	fs.read((char*)Y.begin(), Y.capacityBytes());
+	fs.read((char*)U.begin(), U.capacityBytes());
+	fs.read((char*)V.begin(), V.capacityBytes());
+
+	WATCH_FUNC_BEGIN(Basic);
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			unsigned char y = Y[i * width + j];
+			unsigned char u = U[(i / 2) * (width / 2) + (j / 2)];
+			unsigned char v = V[(i / 2) * (width / 2) + (j / 2)];
+			unsigned char* rgbv = &rgb[(i*width + j) * 3];
+			YuvToRgbPixel(y,u,v,rgbv);
+		}
+	}
+	FileOutputStream ofs("../helpsource/output/test_1920x960_basic.rgb", ios::binary);
+	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+	WATCH_FUNC_END(Basic);
+	
+	WATCH_FUNC_BEGIN(Table);
+	int rdif, invgdif, bdif;
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			unsigned char y = Y[i * width + j];
+			unsigned char u = U[(i / 2) * (width / 2) + (j / 2)];
+			unsigned char v = V[(i / 2) * (width / 2) + (j / 2)];
+			unsigned char* rgbv = &rgb[(i*width + j) * 3];
+
+			rdif = Table_fv1[u];
+			invgdif = Table_fu1[v] + Table_fv2[u];
+			bdif = Table_fu2[v];
+
+			rgbv[0] = y + bdif;
+			rgbv[1] = y - invgdif;
+			rgbv[2] = y + rdif;
+			rgbv[0] = (rgbv[0] < 0 ? 0 : rgbv[0]>255 ? 255 : rgbv[0]);
+			rgbv[1] = (rgbv[1] < 0 ? 0 : rgbv[1]>255 ? 255 : rgbv[1]);
+			rgbv[2] = (rgbv[2] < 0 ? 0 : rgbv[2]>255 ? 255 : rgbv[2]);
+		}
+	}
+	FileOutputStream ofs("../helpsource/output/test_1920x960_table.rgb", ios::binary);
+	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+	WATCH_FUNC_END(Table);
+
+	WATCH_FUNC_BEGIN(Opencl);
+	for (int i = 0; i < m_vec_instance.size(); i++)
+	{
+		rgb.clear();
+		cl_kernel kernel = clCreateKernel(m_vec_instance[i].program, "Yuv420ToRGB24", NULL);
+		if (NULL == kernel)
+		{
+			g_log->warning("Can not create kernel");
+			continue;
+		}
+		cl_int clErr = CL_SUCCESS;
+		cl_mem cl_y = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, Y.capacityBytes(), Y.begin(), &clErr);
+		cl_mem cl_u = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, U.capacityBytes(), U.begin(), &clErr);
+		cl_mem cl_v = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, V.capacityBytes(), V.begin(), &clErr);
+		cl_mem cl_rgb24 = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, rgb.capacityBytes(), rgb.begin(), &clErr);
+
+		int index = 0;
+		cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_y);
+		clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_u);
+		clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_v);
+		clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_rgb24);
+
+		// Launching kernel  
+		const size_t global_ws[] = { height,width };
+		const size_t local_ws[] = { 1 };
+// 		char *point_out = NULL;
+// 		int point_size = rgb.capacityBytes();
+		WATCH_FUNC_BEGIN(opencl_in);
+		clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
+			, kernel
+			, sizeof(global_ws) / sizeof(size_t)
+			, NULL
+			, global_ws
+			, NULL
+			, 0, NULL, NULL);
+// 		clFinish(m_vec_instance[i].cmd_queue);
+// 		point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
+// 			cl_rgb24,
+// 			CL_TRUE,
+// 			CL_MAP_READ,
+// 			0,
+// 			point_size,
+// 			0, NULL, NULL, NULL);
+		clFinish(m_vec_instance[i].cmd_queue);
+		WATCH_FUNC_END(opencl_in);
+		FileOutputStream ofs(format("../helpsource/output/test_1920x960_cl%d.rgb", i), ios::binary);
+		ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+		clReleaseKernel(kernel);
+		clReleaseMemObject(cl_y);
+		clReleaseMemObject(cl_u);
+		clReleaseMemObject(cl_v);
+		clReleaseMemObject(cl_rgb24);
+	}
+	WATCH_FUNC_END(Opencl);
+
+	rgb.clear();
+	WATCH_FUNC_BEGIN(Libyuv);
+	libyuv::I420ToRAW(Y.begin(), width, U.begin(), width / 2, V.begin(), width / 2, rgb.begin(), width * 3, width, height);
+	WATCH_FUNC_END(Libyuv);
+	FileOutputStream ofs("../helpsource/output/test_1920x960_libyuv.rgb", ios::binary);
+	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+}
+
+void HelloWorldCL::YuvToRgbPixel(unsigned char y, unsigned char u, unsigned char v, unsigned char* rgb)
+{
+	rgb[0] = (int)((y & 0xff) + 1.4075 * ((v & 0xff) - 128));
+	rgb[1] = (int)((y & 0xff) - 0.3455 * ((u & 0xff) - 128) - 0.7169*((v & 0xff) - 128));
+	rgb[2] = (int)((y & 0xff) + 1.779 * ((u & 0xff) - 128));
+	rgb[0] = (rgb[0] < 0 ? 0 : rgb[0]>255 ? 255 : rgb[0]);
+	rgb[1] = (rgb[1] < 0 ? 0 : rgb[1]>255 ? 255 : rgb[1]);
+	rgb[2] = (rgb[2] < 0 ? 0 : rgb[2]>255 ? 255 : rgb[2]);
 }
 
 void vector_add_cpu(const float* src_a, const float* src_b,float*  res,const int num)

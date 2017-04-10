@@ -74,8 +74,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>G:\work\open_source\poco-1.7.5\Foundation\include;G:\work\open_source\poco-1.7.5\Util\include;G:\work\open_source\poco-1.7.5\JSON\include;G:\work\open_source\poco-1.7.5\XML\include;G:\work\software\OpenCL SDK\6.3\include;$(IncludePath)</IncludePath>
-    <LibraryPath>G:\work\open_source\poco-1.7.5\lib64;G:\work\software\OpenCL SDK\6.3\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\include;..\thirdparty\poco-1.7.3\;..\thirdparty\libyuv\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\lib\x64;..\thirdparty\poco-1.7.3\x64;..\thirdparty\libyuv\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -94,6 +94,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -102,11 +103,12 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;POCO_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <Profile>true</Profile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -151,6 +153,7 @@
     <Xml Include="config.xml" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="ColorTable.h" />
     <ClInclude Include="HelloWorldCL.h" />
     <ClInclude Include="stdafx.h" />
   </ItemGroup>

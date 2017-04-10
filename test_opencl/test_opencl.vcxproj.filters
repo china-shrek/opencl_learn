@@ -32,6 +32,9 @@
     <ClInclude Include="HelloWorldCL.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="ColorTable.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="test.cl" />
