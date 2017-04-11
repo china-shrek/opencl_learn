@@ -83,7 +83,7 @@ bool HelloWorldCL::Init(string file)
 
         // ±‡“Î≥Ã–Ú
         Buffer<char> build_log(1024 * 1024);
-        clRet = clBuildProgram(edev.program, 1, &m_vec_dev[i], NULL, NULL, NULL);
+        clRet = clBuildProgram(edev.program, 1, &m_vec_dev[i], "-g", NULL, NULL);
         clGetProgramBuildInfo(edev.program, m_vec_dev[i], CL_PROGRAM_BUILD_LOG, build_log.capacity(), build_log.begin(), NULL);
         printf("build log*************beg***************\n");
         printf("%s", build_log.begin());
@@ -212,7 +212,14 @@ void HelloWorldCL::PrintfDevice()
     for (int i = 0; i < m_vec_dev.size(); i++)
     {
         g_log->information("***************************device beg********************************");
-		g_log->information("[version]:%?i", GetDeviceInfo<cl_device_type>(m_vec_dev[i], CL_DEVICE_TYPE));
+		cl_device_type type = GetDeviceInfo<cl_device_type>(m_vec_dev[i], CL_DEVICE_TYPE);
+		if(type == CL_DEVICE_TYPE_CPU)
+			g_log->information("[type]:CPU");
+		else if (type == CL_DEVICE_TYPE_GPU)
+			g_log->information("[type]:GPU");
+		else
+			g_log->information("[type]:Default");
+		g_log->information("[version]:%s", GetDeviceInfoStr(m_vec_dev[i],CL_DEVICE_VERSION));
 		g_log->information("[vendor]:%u", GetDeviceInfo<cl_uint>(m_vec_dev[i], CL_DEVICE_VENDOR_ID));
 		g_log->information("[max compute units]:%u", GetDeviceInfo<cl_uint>(m_vec_dev[i], CL_DEVICE_MAX_COMPUTE_UNITS));
 		g_log->information("[max work item dimensions]:%u", GetDeviceInfo<cl_uint>(m_vec_dev[i], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS));
@@ -423,7 +430,13 @@ void HelloWorldCL::TestMemcopy()
 
 void HelloWorldCL::DoImageCover()
 {
-	FileInputStream fs("../helpsource/test_1920x960_one.yuv", ios::binary);
+	Path p_root = Path::current();
+	p_root.popDirectory();
+	p_root.pushDirectory("helpsource");
+	Path p_child(p_root);
+	p_child.pushDirectory("output");
+
+	FileInputStream fs(p_root.setFileName("test_1920x960_one.yuv").toString(), ios::binary);
 	int width = 1920;
 	int height = 960;
 	Buffer<unsigned char> Y(width * height);
@@ -434,7 +447,8 @@ void HelloWorldCL::DoImageCover()
 	fs.read((char*)U.begin(), U.capacityBytes());
 	fs.read((char*)V.begin(), V.capacityBytes());
 
-	WATCH_FUNC_BEGIN(Basic);
+	rgb.clear();
+	WATCH_FUNC_BEGIN(Basic_height_width);
 	for (int i = 0; i < height; i++)
 	{
 		for (int j = 0; j < width; j++)
@@ -446,10 +460,28 @@ void HelloWorldCL::DoImageCover()
 			YuvToRgbPixel(y,u,v,rgbv);
 		}
 	}
-	FileOutputStream ofs("../helpsource/output/test_1920x960_basic.rgb", ios::binary);
+	FileOutputStream ofs(p_child.setFileName("test_1920x960_basic_for(height_width).rgb").toString(), ios::binary);
 	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
-	WATCH_FUNC_END(Basic);
-	
+	WATCH_FUNC_END(Basic_height_width);
+
+	rgb.clear();
+	WATCH_FUNC_BEGIN(Basic_width_height);
+	for (int i = 0; i < width; i++)
+	{
+		for (int j = 0; j < height; j++)
+		{
+			unsigned char y = Y[j * width + i];
+			unsigned char u = U[(j / 2) * (width / 2) + (i / 2)];
+			unsigned char v = V[(j / 2) * (width / 2) + (i / 2)];
+			unsigned char* rgbv = &rgb[(j*width + i) * 3];
+			YuvToRgbPixel(y, u, v, rgbv);
+		}
+	}
+	FileOutputStream ofs(p_child.setFileName("test_1920x960_basic_for(width_height).rgb").toString(), ios::binary);
+	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+	WATCH_FUNC_END(Basic_width_height);
+
+	rgb.clear();
 	WATCH_FUNC_BEGIN(Table);
 	int rdif, invgdif, bdif;
 	for (int i = 0; i < height; i++)
@@ -473,7 +505,7 @@ void HelloWorldCL::DoImageCover()
 			rgbv[2] = (rgbv[2] < 0 ? 0 : rgbv[2]>255 ? 255 : rgbv[2]);
 		}
 	}
-	FileOutputStream ofs("../helpsource/output/test_1920x960_table.rgb", ios::binary);
+	FileOutputStream ofs(p_child.setFileName("test_1920x960_table.rgb").toString(), ios::binary);
 	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
 	WATCH_FUNC_END(Table);
 
@@ -488,10 +520,10 @@ void HelloWorldCL::DoImageCover()
 			continue;
 		}
 		cl_int clErr = CL_SUCCESS;
-		cl_mem cl_y = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, Y.capacityBytes(), Y.begin(), &clErr);
-		cl_mem cl_u = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, U.capacityBytes(), U.begin(), &clErr);
-		cl_mem cl_v = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, V.capacityBytes(), V.begin(), &clErr);
-		cl_mem cl_rgb24 = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_WRITE | CL_MEM_USE_HOST_PTR, rgb.capacityBytes(), rgb.begin(), &clErr);
+		cl_mem cl_y = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Y.capacityBytes(), Y.begin(), &clErr);
+		cl_mem cl_u = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, U.capacityBytes(), U.begin(), &clErr);
+		cl_mem cl_v = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, V.capacityBytes(), V.begin(), &clErr);
+		cl_mem cl_rgb24 = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_WRITE , rgb.capacityBytes(), NULL, &clErr);
 
 		int index = 0;
 		cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_y);
@@ -500,30 +532,33 @@ void HelloWorldCL::DoImageCover()
 		clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_rgb24);
 
 		// Launching kernel  
-		const size_t global_ws[] = { height,width };
-		const size_t local_ws[] = { 1 };
-// 		char *point_out = NULL;
-// 		int point_size = rgb.capacityBytes();
+		const size_t global_ws[] = { width / 2,height / 2 };
+		const size_t local_ws[] = { 1,1 };
+		char *point_out = NULL;
+		int point_size = rgb.capacityBytes();
 		WATCH_FUNC_BEGIN(opencl_in);
 		clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
 			, kernel
 			, sizeof(global_ws) / sizeof(size_t)
 			, NULL
 			, global_ws
-			, NULL
+			, local_ws
 			, 0, NULL, NULL);
-// 		clFinish(m_vec_instance[i].cmd_queue);
-// 		point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
-// 			cl_rgb24,
-// 			CL_TRUE,
-// 			CL_MAP_READ,
-// 			0,
-// 			point_size,
-// 			0, NULL, NULL, NULL);
 		clFinish(m_vec_instance[i].cmd_queue);
+		point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
+			cl_rgb24,
+			CL_TRUE,
+			CL_MAP_READ,
+			0,
+			point_size,
+			0, NULL, NULL, NULL);
+		clFinish(m_vec_instance[i].cmd_queue);
+		g_log->information("type=%?i version=%s"
+			,GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
+			,GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
 		WATCH_FUNC_END(opencl_in);
-		FileOutputStream ofs(format("../helpsource/output/test_1920x960_cl%d.rgb", i), ios::binary);
-		ofs.write((char*)rgb.begin(), rgb.capacityBytes());
+		FileOutputStream ofs(p_child.setFileName(format("test_1920x960_cl%d.rgb", i)).toString(), ios::binary);
+		ofs.write((char*)point_out, rgb.capacityBytes());
 		clReleaseKernel(kernel);
 		clReleaseMemObject(cl_y);
 		clReleaseMemObject(cl_u);
@@ -536,7 +571,7 @@ void HelloWorldCL::DoImageCover()
 	WATCH_FUNC_BEGIN(Libyuv);
 	libyuv::I420ToRAW(Y.begin(), width, U.begin(), width / 2, V.begin(), width / 2, rgb.begin(), width * 3, width, height);
 	WATCH_FUNC_END(Libyuv);
-	FileOutputStream ofs("../helpsource/output/test_1920x960_libyuv.rgb", ios::binary);
+	FileOutputStream ofs(p_child.setFileName("test_1920x960_libyuv.rgb").toString(), ios::binary);
 	ofs.write((char*)rgb.begin(), rgb.capacityBytes());
 }
 
@@ -610,8 +645,6 @@ void HelloWorldCL::RunProgram()
             , res_h.begin()
             , 0, NULL, NULL);
         clReleaseKernel(kernel); 
-        //clReleaseCommandQueue(queue);
-        //clReleaseContext(context);
         clReleaseMemObject(src_a_d);
         clReleaseMemObject(src_b_d);
         clReleaseMemObject(res_d);
