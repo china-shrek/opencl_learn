@@ -71,6 +71,8 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>C:\Program Files (x86)\Intel\OpenCL SDK\6.3\include;..\thirdparty\poco-1.7.3\;..\thirdparty\libyuv\include;E:\yitong\open_source\boost_1_62_0\outdir\include\boost-1_62;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Program Files %28x86%29\Intel\OpenCL SDK\6.3\lib\x86;..\thirdparty\poco-1.7.3\x86;..\thirdparty\libyuv\x86;E:\yitong\open_source\boost_1_62_0\outdir\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -89,7 +91,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;POCO_STATIC;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

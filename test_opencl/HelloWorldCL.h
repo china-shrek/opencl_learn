@@ -3,6 +3,7 @@
 #include "stdafx.h"
 #include <CL/cl.h>
 #include <vector>
+#include "Poco/Buffer.h"
 
 #pragma comment(lib,"OpenCL.lib")
 
@@ -42,6 +43,11 @@ private:
     void TestMemcopy();
 
 	void DoImageCover();
+	void DoImageCoverBasic(int width,int height,Path p,Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
+	void DoImageCoverBasicTable(int width, int height, Path p, Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
+	void DoImageCoverOpenclNew(int width, int height, Path p, Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
+	void DoImageCoverOpenclOld(int width, int height, Path p, Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
+	void DoImageCoverLibyuv(int width, int height, Path p, Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
 	void YuvToRgbPixel(unsigned char y, unsigned char u, unsigned char v,unsigned char* rgb);
 
 private:

@@ -78,9 +78,13 @@
     <OutDir>$(SolutionDir)thirdparty\libyuv\$(Platform)</OutDir>
     <IncludePath>..\thirdparty\libyuv\include;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>$(SolutionDir)thirdparty\libyuv\x86</OutDir>
+    <IncludePath>..\thirdparty\libyuv\include;E:\yitong\open_source\boost_1_62_0\outdir\include\boost-1_62;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
-      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>

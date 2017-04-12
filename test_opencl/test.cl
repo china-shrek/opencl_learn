@@ -52,3 +52,20 @@ __kernel void Yuv420ToRGB24 (__global uchar *y,__global uchar *u,__global uchar 
 		yuv420p_to_rgb24_pixel(Y,U,V,&rgb24[indexRGB]);
 	}
 } 
+
+__kernel void Yuv420ToRGB24_old (__global uchar *y,__global uchar *u,__global uchar *v,__global uchar *rgb24)  
+{  
+	int i		= get_global_id(0);
+	int j		= get_global_id(1);  
+	int width	= get_global_size(1);
+	//int height	= get_global_size(0);
+	
+	int index = i * width + j;
+	uchar Y = y[index];
+	index = (i / 2) * (width / 2) + (j / 2);
+	uchar U = u[index];
+	uchar V = v[index];
+	index = (i*width + j) * 3;
+	//__global uchar *rgb = &rgb24[index];
+	yuv420p_to_rgb24_pixel(Y,U,V,&rgb24[index]); 
+} 
