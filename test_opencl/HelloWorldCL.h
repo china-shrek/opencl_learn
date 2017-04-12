@@ -50,6 +50,10 @@ private:
 	void DoImageCoverLibyuv(int width, int height, Path p, Buffer<unsigned char> &Y, Buffer<unsigned char> &U, Buffer<unsigned char> &V, Buffer<unsigned char> &rgb);
 	void YuvToRgbPixel(unsigned char y, unsigned char u, unsigned char v,unsigned char* rgb);
 
+    void RunKernel_IDCheck();
+    void RunKernel_DataCopy(string funcname,int localsize);
+    void DoImageProcess();
+
 private:
     vector<cl_platform_id>      m_vec_ptf;
     vector<cl_device_id>        m_vec_dev;

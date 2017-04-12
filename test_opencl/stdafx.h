@@ -24,9 +24,9 @@ extern Logger *g_log;
 
 #define WATCH_FUNC_TIME(name) (sw##name.elapsed())
 
-#define WATCH_FUNC_BEGIN(name) { Stopwatch sw##name; sw##name.start();g_log->information("******Trace Time Cost[line=%d name=%s]*********begin",(int)__LINE__, string(#name));
+#define WATCH_FUNC_BEGIN(name) { Stopwatch sw##name; sw##name.start();g_log->information("beg******Trace Time Cost[line=%d name=%s]*********",(int)__LINE__, string(#name));
 
-#define WATCH_FUNC_END(name) sw##name.stop(); g_log->information("******Trace Time Cost[line=%d name=%s cost=%?i/ms]*********end",(int)__LINE__, string(#name),WATCH_FUNC_TIME(name));}
+#define WATCH_FUNC_END(name) sw##name.stop(); g_log->information("end******Trace Time Cost[line=%d name=%s]*********cost=%?i/ms\n",(int)__LINE__, string(#name),WATCH_FUNC_TIME(name));}
 
 #define SAFE_DEL(ptr) if(ptr){delete ptr;ptr=NULL;}
 

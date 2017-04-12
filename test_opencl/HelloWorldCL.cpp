@@ -100,7 +100,13 @@ bool HelloWorldCL::Init(string file)
 
     //RunProgram();
     //TestMemcopy();
-	DoImageCover();
+    //RunKernel_IDCheck();
+	//DoImageCover();
+
+    //RunKernel_DataCopy("DataCopy",32);
+    //RunKernel_DataCopy("DataCopyVector",32);
+    //RunKernel_DataCopy("DataCopyAsync",480);
+    DoImageProcess();
 
     return true;
 }
@@ -657,6 +663,186 @@ void HelloWorldCL::YuvToRgbPixel(unsigned char y, unsigned char u, unsigned char
 	rgb[0] = (rgb[0] < 0 ? 0 : rgb[0]>255 ? 255 : rgb[0]);
 	rgb[1] = (rgb[1] < 0 ? 0 : rgb[1]>255 ? 255 : rgb[1]);
 	rgb[2] = (rgb[2] < 0 ? 0 : rgb[2]>255 ? 255 : rgb[2]);
+}
+
+void HelloWorldCL::RunKernel_IDCheck()
+{
+    Buffer<cl_float> buf(50);
+    buf.clear();
+    for (int i = 0; i < m_vec_instance.size(); i++)
+    {
+        cl_kernel kernel = clCreateKernel(m_vec_instance[i].program, "IDCheck", NULL);
+        if (NULL == kernel)
+        {
+            g_log->warning("Can not create kernel");
+            continue;
+        }
+        cl_int clErr = CL_SUCCESS;
+        
+        cl_mem cl_buf = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, buf.capacityBytes(), buf.begin(), &clErr);
+
+        int index = 0;
+        cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf);
+
+        // Launching kernel  
+        const size_t global_ws[] = { 6,4 };
+        const size_t local_ws[] = { 3,2 };
+        const size_t offset[] = { 3,5 };
+        char *point_out = NULL;
+        int point_size = buf.capacityBytes();
+        WATCH_FUNC_BEGIN(RunKernel_IDCheck);
+        clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
+            , kernel
+            , sizeof(global_ws) / sizeof(size_t)
+            , offset
+            , global_ws
+            , local_ws
+            , 0, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
+            cl_buf,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            point_size,
+            0, NULL, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        g_log->information("type=%?i version=%s"
+            , GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
+            , GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
+        WATCH_FUNC_END(RunKernel_IDCheck);
+        for (int i = 0; i < buf.capacity(); i++)
+        {
+            printf("%f\n", buf[i]);
+        }
+        clReleaseKernel(kernel);
+        clReleaseMemObject(cl_buf);
+    }
+}
+
+void HelloWorldCL::RunKernel_DataCopy(string funcname, int localsize)
+{
+    Buffer<cl_char> bufin(1920 * 1080);
+    Buffer<cl_char> bufout(1920 * 1080);
+    for (int i = 0; i < m_vec_instance.size(); i++)
+    {
+        bufout[1920] = 0;
+        bufin[1920] = 64;
+        cl_kernel kernel = clCreateKernel(m_vec_instance[i].program, funcname.c_str(), NULL);
+        if (NULL == kernel)
+        {
+            g_log->warning("Can not create kernel");
+            continue;
+        }
+        cl_int clErr = CL_SUCCESS;
+
+        cl_mem cl_buf_in = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, bufin.capacityBytes(), bufin.begin(), &clErr);
+        cl_mem cl_buf_out = clCreateBuffer(m_vec_instance[i].ctx, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, bufout.capacityBytes(), bufout.begin(), &clErr);
+
+        int index = 0;
+        cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_in);
+        clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_out);
+
+        // Launching kernel  
+        const size_t global_ws[] = { bufin.capacity() / 16 };
+        const size_t local_ws[] = { localsize };
+        const size_t offset[] = { 0 };
+        char *point_out = NULL;
+        int point_size = bufin.capacityBytes();
+        WATCH_FUNC_BEGIN(RunKernel_DataCopy);
+        clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
+            , kernel
+            , sizeof(global_ws) / sizeof(size_t)
+            , offset
+            , global_ws
+            , local_ws
+            , 0, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
+            cl_buf_out,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            point_size,
+            0, NULL, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        g_log->information("type=%?i version=%s"
+            , GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
+            , GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
+        g_log->information("result = %d", (int)bufout[1920]);
+        WATCH_FUNC_END(RunKernel_DataCopy);
+        clReleaseKernel(kernel);
+        clReleaseMemObject(cl_buf_in);
+        clReleaseMemObject(cl_buf_out);
+    }
+}
+
+void HelloWorldCL::DoImageProcess()
+{
+    Path p_root = Path::current();
+    p_root.popDirectory();
+    p_root.pushDirectory("helpsource");
+    Path p_child(p_root);
+    p_child.pushDirectory("output");
+
+    FileInputStream fs(p_root.setFileName("test_1920x960_one.rgba").toString(), ios::binary);
+    int width = 1920;
+    int height = 960;
+    Buffer<unsigned char> rgbInput(width * height * 4);
+    fs.read((char*)rgbInput.begin(), rgbInput.capacityBytes());
+    Buffer<unsigned char> rgbOutput(width * height * 4);
+    for (int i = 0; i < m_vec_instance.size(); i++)
+    {
+        rgbOutput.clear();
+        cl_kernel kernel = clCreateKernel(m_vec_instance[i].program, "ImageProcessCopy", NULL);
+        if (NULL == kernel)
+        {
+            g_log->warning("Can not create kernel");
+            continue;
+        }
+        cl_int clErr = CL_SUCCESS;       
+
+        cl_image_format format_in = { CL_RGBA, CL_UNSIGNED_INT8 };
+        cl_mem cl_buf_in = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbInput.begin(), &clErr);
+        cl_mem cl_buf_out = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbOutput.begin(), &clErr);
+
+        int index = 0;
+        cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_in);
+        clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_out);
+
+        // Launching kernel  
+        const size_t global_ws[] = { width,height};
+        const size_t local_ws[] = { 32,1 };
+        const size_t offset[] = { 0,0 };
+        char *point_out = NULL;
+        int point_size = rgbInput.capacityBytes();
+        WATCH_FUNC_BEGIN(DoImageProcess);
+        clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
+            , kernel
+            , sizeof(global_ws) / sizeof(size_t)
+            , NULL//offset
+            , global_ws
+            , local_ws
+            , 0, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
+            cl_buf_out,
+            CL_TRUE,
+            CL_MAP_READ,
+            0,
+            point_size,
+            0, NULL, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        g_log->information("type=%?i version=%s"
+            , GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
+            , GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
+        WATCH_FUNC_END(DoImageProcess);
+        FileOutputStream ofs(p_child.setFileName(format("Image_copy_test_1920x960_cl%d.rgb", i)).toString(), ios::binary);
+        ofs.write((char*)point_out, rgbOutput.capacityBytes());
+        clReleaseKernel(kernel);
+        clReleaseMemObject(cl_buf_in);
+        clReleaseMemObject(cl_buf_out);
+    }
 }
 
 void vector_add_cpu(const float* src_a, const float* src_b,float*  res,const int num)
