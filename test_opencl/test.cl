@@ -120,10 +120,34 @@ __kernel void DataCopyAsync(const global char *in, global char *out)
     wait_group_events(1,&evt2);
 }
 
+__constant sampler_t Sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 __kernel void ImageProcessCopy(read_only image2d_t in,write_only image2d_t out)
 {
     int2 coord = (int2)(get_global_id(0),get_global_id(1));
-    float4 data = read_imagef(in,coord);
-    //data += (float4)(0.2f);
+    float4 data = (float4)(0,0,0,0); 
+    data = read_imagef(in,coord);
+    data += (float4)(0.1f);
+    //data = (float4)(0.0,1.0,0.0,0.0);
+    write_imagef(out,coord,data);
+}
+
+__kernel void ImageProcessRotate(read_only image2d_t in,write_only image2d_t out,float angle)
+{
+    int2 coord = (int2)(get_global_id(0),get_global_id(1));
+    int2 res = (int2)(get_image_width(in),get_image_height(in));
+    float sinma = sin(angle);
+    float cosma = cos(angle);
+
+    //计算旋转中心
+    int2 halfRes = res / (int2)(2);
+    int2 roateCenter = coord - halfRes;
+    
+    //计算旋转后的坐标
+    float2 readCoord;
+    readCoord.x = (cosma * roateCenter.x - sinma * roateCenter.y) + halfRes.x;
+    readCoord.y = (sinma * roateCenter.x + cosma * roateCenter.y) + halfRes.y;
+
+    //读取和写图像
+    float4 data = read_imagef(in,Sampler,readCoord);
     write_imagef(out,coord,data);
 }

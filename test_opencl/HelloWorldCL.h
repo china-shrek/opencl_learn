@@ -53,6 +53,7 @@ private:
     void RunKernel_IDCheck();
     void RunKernel_DataCopy(string funcname,int localsize);
     void DoImageProcess();
+    void DoImageProcessRoate(int angle);
 
 private:
     vector<cl_platform_id>      m_vec_ptf;

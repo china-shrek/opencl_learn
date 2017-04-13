@@ -106,7 +106,8 @@ bool HelloWorldCL::Init(string file)
     //RunKernel_DataCopy("DataCopy",32);
     //RunKernel_DataCopy("DataCopyVector",32);
     //RunKernel_DataCopy("DataCopyAsync",480);
-    DoImageProcess();
+    //DoImageProcess();
+    DoImageProcessRoate(180);
 
     return true;
 }
@@ -802,7 +803,7 @@ void HelloWorldCL::DoImageProcess()
         }
         cl_int clErr = CL_SUCCESS;       
 
-        cl_image_format format_in = { CL_RGBA, CL_UNSIGNED_INT8 };
+        cl_image_format format_in = { CL_RGBA, CL_UNORM_INT8 };
         cl_mem cl_buf_in = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbInput.begin(), &clErr);
         cl_mem cl_buf_out = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbOutput.begin(), &clErr);
 
@@ -812,7 +813,7 @@ void HelloWorldCL::DoImageProcess()
 
         // Launching kernel  
         const size_t global_ws[] = { width,height};
-        const size_t local_ws[] = { 32,1 };
+        const size_t local_ws[] = { 8,4 };
         const size_t offset[] = { 0,0 };
         char *point_out = NULL;
         int point_size = rgbInput.capacityBytes();
@@ -822,23 +823,111 @@ void HelloWorldCL::DoImageProcess()
             , sizeof(global_ws) / sizeof(size_t)
             , NULL//offset
             , global_ws
-            , local_ws
+            , NULL//local_ws
             , 0, NULL, NULL);
         clFinish(m_vec_instance[i].cmd_queue);
-        point_out = (char *)clEnqueueMapBuffer(m_vec_instance[i].cmd_queue,
-            cl_buf_out,
-            CL_TRUE,
-            CL_MAP_READ,
-            0,
-            point_size,
-            0, NULL, NULL, NULL);
-        clFinish(m_vec_instance[i].cmd_queue);
+//         size_t originst[3] = {};
+//         size_t regionst[3] = {};
+//         size_t  rowPitch = 0;
+//         size_t  slicePitch = 0;
+//         regionst[0] = width; regionst[1] = height; regionst[2] = 1;
+//         point_out = (char *)clEnqueueMapImage(m_vec_instance[i].cmd_queue
+//             , cl_buf_out
+//             , CL_TRUE
+//             , CL_MAP_READ
+//             , originst
+//             , regionst
+//             ,&rowPitch
+//             ,&slicePitch
+//             , 0, NULL, NULL, &clRet);
+//         clFinish(m_vec_instance[i].cmd_queue);
         g_log->information("type=%?i version=%s"
             , GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
             , GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
         WATCH_FUNC_END(DoImageProcess);
+        Buffer<unsigned char> tempout(width*height * 3);
+        libyuv::ARGBToRGB24((uint8_t*)rgbOutput.begin(), width * 4, tempout.begin(), width * 3, width, height);
         FileOutputStream ofs(p_child.setFileName(format("Image_copy_test_1920x960_cl%d.rgb", i)).toString(), ios::binary);
-        ofs.write((char*)point_out, rgbOutput.capacityBytes());
+        ofs.write((char*)tempout.begin(), tempout.capacityBytes());
+        clReleaseKernel(kernel);
+        clReleaseMemObject(cl_buf_in);
+        clReleaseMemObject(cl_buf_out);
+    }
+}
+
+void HelloWorldCL::DoImageProcessRoate(int angle)
+{
+    Path p_root = Path::current();
+    p_root.popDirectory();
+    p_root.pushDirectory("helpsource");
+    Path p_child(p_root);
+    p_child.pushDirectory("output");
+
+    FileInputStream fs(p_root.setFileName("test_1920x960_one.rgba").toString(), ios::binary);
+    int width = 1920;
+    int height = 960;
+    Buffer<unsigned char> rgbInput(width * height * 4);
+    fs.read((char*)rgbInput.begin(), rgbInput.capacityBytes());
+    Buffer<unsigned char> rgbOutput(width * height * 4);
+    for (int i = 0; i < m_vec_instance.size(); i++)
+    {
+        rgbOutput.clear();
+        cl_kernel kernel = clCreateKernel(m_vec_instance[i].program, "ImageProcessRotate", NULL);
+        if (NULL == kernel)
+        {
+            g_log->warning("Can not create kernel");
+            continue;
+        }
+        cl_int clErr = CL_SUCCESS;
+
+        cl_image_format format_in = { CL_RGBA, CL_UNORM_INT8 };
+        cl_mem cl_buf_in = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_READ_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbInput.begin(), &clErr);
+        cl_mem cl_buf_out = clCreateImage2D(m_vec_instance[i].ctx, CL_MEM_WRITE_ONLY | CL_MEM_USE_HOST_PTR, &format_in, width, height, width * 4, rgbOutput.begin(), &clErr);
+
+        int index = 0;
+        cl_float arg_angel = angle;
+        cl_int clRet = clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_in);
+        clRet |= clSetKernelArg(kernel, index++, sizeof(cl_mem), (void *)&cl_buf_out);
+        clRet |= clSetKernelArg(kernel, index++, sizeof(cl_float), (void *)&arg_angel);
+
+        // Launching kernel  
+        const size_t global_ws[] = { width,height };
+        const size_t local_ws[] = { 8,4 };
+        const size_t offset[] = { 0,0 };
+        char *point_out = NULL;
+        int point_size = rgbInput.capacityBytes();
+        WATCH_FUNC_BEGIN(DoImageProcessRoate);
+        clRet = clEnqueueNDRangeKernel(m_vec_instance[i].cmd_queue
+            , kernel
+            , sizeof(global_ws) / sizeof(size_t)
+            , NULL//offset
+            , global_ws
+            , NULL//local_ws
+            , 0, NULL, NULL);
+        clFinish(m_vec_instance[i].cmd_queue);
+        //         size_t originst[3] = {};
+        //         size_t regionst[3] = {};
+        //         size_t  rowPitch = 0;
+        //         size_t  slicePitch = 0;
+        //         regionst[0] = width; regionst[1] = height; regionst[2] = 1;
+        //         point_out = (char *)clEnqueueMapImage(m_vec_instance[i].cmd_queue
+        //             , cl_buf_out
+        //             , CL_TRUE
+        //             , CL_MAP_READ
+        //             , originst
+        //             , regionst
+        //             ,&rowPitch
+        //             ,&slicePitch
+        //             , 0, NULL, NULL, &clRet);
+        //         clFinish(m_vec_instance[i].cmd_queue);
+        g_log->information("type=%?i version=%s"
+            , GetDeviceInfo<cl_device_type>(m_vec_instance[i].id, CL_DEVICE_TYPE)
+            , GetDeviceInfoStr(m_vec_instance[i].id, CL_DEVICE_VERSION));
+        WATCH_FUNC_END(DoImageProcessRoate);
+        Buffer<unsigned char> tempout(width*height * 3);
+        libyuv::ARGBToRGB24((uint8_t*)rgbOutput.begin(), width * 4, tempout.begin(), width * 3, width, height);
+        FileOutputStream ofs(p_child.setFileName(format("Image_rotate_test_1920x960_cl%d.rgb", i)).toString(), ios::binary);
+        ofs.write((char*)tempout.begin(), tempout.capacityBytes());
         clReleaseKernel(kernel);
         clReleaseMemObject(cl_buf_in);
         clReleaseMemObject(cl_buf_out);
